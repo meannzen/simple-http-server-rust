@@ -31,7 +31,7 @@ impl HttpMethod {
 #[derive(Debug)]
 struct Route {
     method: HttpMethod,
-    url: String,
+    path: String,
 }
 
 impl<'a> From<std::borrow::Cow<'a, str>> for Route {
@@ -42,33 +42,47 @@ impl<'a> From<std::borrow::Cow<'a, str>> for Route {
             Some(s) => s.to_string(),
             _ => "".to_string(),
         };
-        Route { method, url }
+        Route { method, path: url }
     }
 }
 
-fn handle_connection(stream: &mut TcpStream) -> Result<(), std::io::Error> {
-    let mut response = "HTTP/1.1 200 OK\r\n\r\n";
+fn handle_connection(stream: &mut TcpStream) {
     let mut buffer = [0; 1024];
     match stream.read(&mut buffer) {
         Ok(_) => {
             let request: std::borrow::Cow<str> = String::from_utf8_lossy(&buffer);
             let route: Route = request.into();
-            let _url = "/".to_string();
-            match (route.method, route.url.len()) {
-                (HttpMethod::GET, 1) => {
-                   
+            match (route.path.as_str(), route.method) {
+                (path, HttpMethod::GET) => {
+                    if path == "/" {
+                        stream
+                            .write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes())
+                            .unwrap();
+                    } else if path.starts_with("/echo/") {
+                        write!(
+                            stream,
+                            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                            path.len() - 6,
+                            path.strip_prefix("/echo/").unwrap()
+                        ).unwrap();
+                    } else {
+                        stream
+                            .write_all("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes())
+                            .unwrap();
+                    }
                 }
                 _ => {
-                    response = "HTTP/1.1 404 Not Found\r\n\r\n";
+                    stream
+                        .write_all("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes())
+                        .unwrap();
                 }
             }
         }
         _ => {}
     }
-    stream.write_all(response.as_bytes())
 }
 
-fn main() {
+fn main() -> Result<(), std::io::Error> {
     let listener: TcpListener = TcpListener::bind("127.0.0.1:4221").unwrap();
 
     for stream in listener.incoming() {
@@ -82,4 +96,5 @@ fn main() {
             }
         }
     }
+    Ok(())
 }
