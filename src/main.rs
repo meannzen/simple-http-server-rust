@@ -1,5 +1,7 @@
 use std::{
     collections::HashMap,
+    env,
+    fs::File,
     io::{Read, Write},
     net::TcpStream,
     thread,
@@ -60,6 +62,25 @@ fn read_stream(mut stream: &TcpStream) -> Option<HttpRequst> {
     }
 }
 
+fn file_handler(file_name: String) -> String {
+    let path = env::args().nth(2).unwrap();
+    let file_path = format!("{path}/{file_name}");
+    let open_file = File::open(&file_path);
+    match open_file {
+        Ok(mut file) => {
+            let mut content = String::new();
+            match file.read_to_string(&mut content) {
+                Ok(_) => {
+                    return format!("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: {}\r\n\r\n{}\r\n", content.len(), content);
+                }
+                Err(_) => {}
+            }
+        }
+        Err(_) => {}
+    }
+    "HTTP/1.1 404 Not Found\r\n\r\n".to_string()
+}
+
 fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
     let http_request_option = read_stream(stream);
     match http_request_option {
@@ -84,6 +105,13 @@ fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
                         let _ = stream.write(response.as_bytes());
                     } else {
                         let _ = stream.write("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
+                    }
+                } else if path.starts_with("/files/") {
+                    if let Some(file_name) = path.strip_prefix("/files/") {
+                        let response = file_handler(file_name.to_string());
+                        let _ = stream.write(response.as_bytes());
+                    } else {
+                        let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
                     }
                 } else {
                     let _ = stream.write("HTTP/1.1 404 Not Found\r\n\r\n".as_bytes());
