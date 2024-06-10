@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     net::TcpStream,
+    thread,
 };
 
 #[derive(Debug)]
@@ -100,14 +101,16 @@ fn handle_client(stream: &mut TcpStream) -> anyhow::Result<()> {
 fn main() -> std::io::Result<()> {
     let listener = std::net::TcpListener::bind("127.0.0.1:4221")?;
     for stream in listener.incoming() {
-        match stream {
+        thread::spawn(|| match stream {
             Ok(mut s) => {
                 let _ = handle_client(&mut s);
             }
             Err(e) => {
                 println!("Cannot handle request:{:?}", e);
             }
-        }
+        })
+        .join()
+        .unwrap()
     }
 
     Ok(())
