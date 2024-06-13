@@ -1,4 +1,6 @@
 use core::panic;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use http_server_starter_rust::{parse_request, Method, Request, Response, ThreadPool};
 use std::{
     env,
@@ -42,11 +44,18 @@ fn handle_request(request: Request) -> std::io::Result<Response> {
             .filter(|&text| text.contains("gzip"));
 
         match accept_encoding {
-            Some(_) => Response::ok()
-                .set_header("Content-Type", "text/plain")
-                .set_header("Content-Length", content.len().to_string().as_str())
-                .set_header("Content-Encoding", "gzip")
-                .set_body(content.as_bytes()),
+            Some(_) => {
+                let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+                encoder
+                    .write_all(content.as_bytes())
+                    .expect("Failed to write to encoder");
+                let gzipped_data = encoder.finish().expect("Failed to finish encoding");
+                Response::ok()
+                    .set_header("Content-Type", "text/plain")
+                    .set_header("Content-Length", gzipped_data.len().to_string().as_str())
+                    .set_header("Content-Encoding", "gzip")
+                    .set_body(gzipped_data)
+            }
             None => Response::ok()
                 .set_header("Content-Type", "text/plain")
                 .set_header("Content-Length", content.len().to_string().as_str())
