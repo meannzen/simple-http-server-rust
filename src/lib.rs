@@ -187,14 +187,11 @@ pub fn parse_request(mut stream: &mut TcpStream) -> Result<Request, ParseSteamEr
 
     let mut body = Vec::new();
     if let Some(length) = header.get("Content-Length") {
-        match length.parse() {
-            Ok(n) => {
-                body.resize(n, 0);
-                buf_reader
-                    .read_exact(&mut body)
-                    .map_err(|e| ParseSteamError(e.to_string()))?;
-            }
-            _ => {}
+        if let Ok(n) = length.parse() {
+            body.resize(n, 0);
+            buf_reader
+                .read_exact(&mut body)
+                .map_err(|e| ParseSteamError(e.to_string()))?;
         };
     }
 

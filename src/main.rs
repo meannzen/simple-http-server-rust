@@ -36,10 +36,21 @@ fn handle_request(request: Request) -> std::io::Result<Response> {
     let response = if &request.path == "/" {
         Response::ok()
     } else if let Some(content) = request.path.strip_prefix("/echo/") {
-        Response::ok()
-            .set_header("Content-Type", "text/plain")
-            .set_header("Content-Length", content.len().to_string().as_str())
-            .set_body(content.as_bytes())
+        let accept_encoding = match request.header.get("Accept-Encoding") {
+            Some(text) => *text == *"gzip",
+            _ => false,
+        };
+        match accept_encoding {
+            true => Response::ok()
+                .set_header("Content-Type", "text/plain")
+                .set_header("Content-Length", content.len().to_string().as_str())
+                .set_header("Content-Encoding", "gzip")
+                .set_body(content.as_bytes()),
+            false => Response::ok()
+                .set_header("Content-Type", "text/plain")
+                .set_header("Content-Length", content.len().to_string().as_str())
+                .set_body(content.as_bytes()),
+        }
     } else if &request.path == "/user-agent" {
         let user_agent = match request.header.get("User-Agent") {
             Some(value) => value.to_owned(),
@@ -83,20 +94,16 @@ fn handle_request(request: Request) -> std::io::Result<Response> {
             }
             Method::POST => {
                 let result = match File::create(&file_path) {
-                    Ok(mut file) => {
-                        let writen = match file.write_all(&request.body) {
-                            Ok(_) => Ok(()),
-                            Err(_) => Err(()),
-                        };
-                        writen
-                    }
+                    Ok(mut file) => match file.write_all(&request.body) {
+                        Ok(_) => Ok(()),
+                        Err(_) => Err(()),
+                    },
                     Err(_) => Err(()),
                 };
-                let response = match result {
+                match result {
                     Ok(_) => Response::created(),
                     _ => Response::not_found(),
-                };
-                response
+                }
             }
         };
 
