@@ -36,17 +36,18 @@ fn handle_request(request: Request) -> std::io::Result<Response> {
     let response = if &request.path == "/" {
         Response::ok()
     } else if let Some(content) = request.path.strip_prefix("/echo/") {
-        let accept_encoding = match request.header.get("Accept-Encoding") {
-            Some(text) => *text == *"gzip",
-            _ => false,
-        };
+        let accept_encoding = request
+            .header
+            .get("Accept-Encoding")
+            .filter(|&text| text.contains("gzip"));
+
         match accept_encoding {
-            true => Response::ok()
+            Some(_) => Response::ok()
                 .set_header("Content-Type", "text/plain")
                 .set_header("Content-Length", content.len().to_string().as_str())
                 .set_header("Content-Encoding", "gzip")
                 .set_body(content.as_bytes()),
-            false => Response::ok()
+            None => Response::ok()
                 .set_header("Content-Type", "text/plain")
                 .set_header("Content-Length", content.len().to_string().as_str())
                 .set_body(content.as_bytes()),
