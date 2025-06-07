@@ -25,7 +25,7 @@ thiserror = "2.0.9"                                # error handling
 tokio = { version = "1.23.0", features = ["full"] } # async networking
 nom = "6.2.2"                                       # parser combinators
 itertools = "0.14.0"                                # General iterator helpers
-flate2 = "1.0"
+flate2 = "1.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"                         # nicer looking assertions
