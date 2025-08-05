@@ -22,7 +22,7 @@ edition = "2021"
 anyhow = "1.0.98"                                   # error handling
 bytes = "1.10.1"                                     # helps manage buffers
 thiserror = "2.0.9"                                # error handling
-tokio = { version = "1.46.1", features = ["full"] } # async networking
+tokio = { version = "1.47.1", features = ["full"] } # async networking
 nom = "8.0.0"                                       # parser combinators
 itertools = "0.14.0"                                # General iterator helpers
 flate2 = "1.1"
