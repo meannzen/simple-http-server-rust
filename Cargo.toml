@@ -19,7 +19,7 @@ edition = "2021"
 #
 # DON'T EDIT THIS!
 [dependencies]
-anyhow = "1.0.99"                                   # error handling
+anyhow = "1.0.100"                                   # error handling
 bytes = "1.10.1"                                     # helps manage buffers
 thiserror = "2.0.16"                                # error handling
 tokio = { version = "1.47.1", features = ["full"] } # async networking
