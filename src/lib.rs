@@ -8,7 +8,7 @@ use std::{
 };
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct ParseSteamError(String);
+pub struct ParseStreamError(String);
 
 #[derive(Default, PartialEq, Debug, Clone, Copy, Eq)]
 pub enum StatusCode {
@@ -28,12 +28,14 @@ impl std::fmt::Display for StatusCode {
         write!(f, "{status}")
     }
 }
+
 #[derive(Debug, Default, Clone)]
 pub struct Response {
     status: StatusCode,
     header: HashMap<String, String>,
     body: Vec<u8>,
 }
+
 impl Response {
     pub fn ok() -> Response {
         Response {
@@ -68,7 +70,7 @@ impl Response {
         self
     }
 
-    pub fn write(self, mut writer: impl Write) -> Result<(), std::io::Error> {
+    pub fn write(self, writer: &mut impl Write) -> Result<(), std::io::Error> {
         let status_line = format!("HTTP/1.1 {}\r\n", self.status);
         writer.write_all(status_line.as_bytes())?;
         for (k, v) in self.header.into_iter() {
@@ -76,20 +78,9 @@ impl Response {
         }
 
         writer.write_all(b"\r\n")?;
-        // body
         writer.write_all(&self.body)?;
 
         Ok(())
-    }
-}
-impl FromStr for Method {
-    type Err = ParseSteamError;
-    fn from_str(method: &str) -> Result<Self, Self::Err> {
-        match method {
-            "GET" => Ok(Method::GET),
-            "POST" => Ok(Method::POST),
-            _ => Err(ParseSteamError(format!("Invalid Http Method {}", method))),
-        }
     }
 }
 
@@ -102,7 +93,7 @@ type Job = Box<dyn FnOnce() + Send + 'static>;
 
 impl ThreadPool {
     pub fn new(size: usize) -> Self {
-        assert!(size > 0); // panic
+        assert!(size > 0);
 
         let mut workers = Vec::with_capacity(size);
         let (sender, receiver) = mpsc::channel::<Job>();
@@ -133,8 +124,6 @@ impl Worker {
     fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
         let thread = thread::spawn(move || {
             while let Ok(job) = receiver.lock().unwrap().recv() {
-                println!("Worker {id} got a job; executing.");
-
                 job();
             }
         });
@@ -150,6 +139,17 @@ pub enum Method {
     POST,
 }
 
+impl FromStr for Method {
+    type Err = ParseStreamError;
+    fn from_str(method: &str) -> Result<Self, Self::Err> {
+        match method {
+            "GET" => Ok(Method::GET),
+            "POST" => Ok(Method::POST),
+            _ => Err(ParseStreamError(format!("Invalid HTTP Method {}", method))),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Request {
     pub method: Method,
@@ -158,21 +158,25 @@ pub struct Request {
     pub body: Vec<u8>,
 }
 
-pub fn parse_request(mut stream: &mut TcpStream) -> Result<Request, ParseSteamError> {
-    let mut buf_reader = BufReader::new(&mut stream);
+pub fn parse_request(stream: &mut TcpStream) -> Result<Request, ParseStreamError> {
+    let mut buf_reader = BufReader::new(stream);
     let mut http_request: Vec<String> = vec![];
 
     for line in buf_reader.by_ref().lines() {
-        let line = line.map_err(|e| ParseSteamError(e.to_string()))?;
+        let line = line.map_err(|e| ParseStreamError(e.to_string()))?;
         if line.is_empty() {
             break;
         }
         http_request.push(line);
     }
 
+    if http_request.is_empty() {
+        return Err(ParseStreamError("No request line received".to_string()));
+    }
+
     let parts: Vec<_> = http_request[0].split(' ').collect();
     if parts.len() != 3 {
-        return Err(ParseSteamError("Invalid request".to_string()));
+        return Err(ParseStreamError("Invalid request".to_string()));
     }
 
     let method: Method = parts[0].parse()?;
@@ -191,7 +195,7 @@ pub fn parse_request(mut stream: &mut TcpStream) -> Result<Request, ParseSteamEr
             body.resize(n, 0);
             buf_reader
                 .read_exact(&mut body)
-                .map_err(|e| ParseSteamError(e.to_string()))?;
+                .map_err(|e| ParseStreamError(e.to_string()))?;
         };
     }
 
