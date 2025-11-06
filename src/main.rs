@@ -1,6 +1,6 @@
+use codecrafters_http_server::{parse_request, Method, Request, Response, ThreadPool};
 use flate2::write::GzEncoder;
 use flate2::Compression;
-use http_server_starter_rust::{parse_request, Method, Request, Response, ThreadPool};
 use std::{
     env,
     fs::File,
