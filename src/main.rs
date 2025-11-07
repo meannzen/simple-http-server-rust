@@ -18,43 +18,18 @@ fn main() {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    loop {
-        let request = match parse_request(&mut stream) {
-            Ok(r) => r,
-            Err(_) => {
-                let _ = Response::not_found().write(&mut stream);
-                let _ = stream.flush();
-                break;
-            }
-        };
-
-        let response = match handle_request(&request) {
-            Ok(response) => response,
-            Err(_) => Response::not_found(),
-        };
-
-        let should_close = request
-            .header
-            .get("Connection")
-            .map(|v| v.to_lowercase().contains("close"))
-            .unwrap_or(false);
-
-        let response = if should_close {
-            response.set_header("Connection", "close")
-        } else {
-            response.set_header("Connection", "keep-alive")
-        };
-
-        let _ = response.write(&mut stream);
-        let _ = stream.flush();
-
-        if should_close {
-            break;
+    let request = parse_request(&mut stream).unwrap_or_default(); 
+    match handle_request(request) {
+        Ok(response) => {
+            let _ = response.write(stream);
+        }
+        Err(_) => {
+            panic!("Server error")
         }
     }
 }
 
-fn handle_request(request: &Request) -> std::io::Result<Response> {
+fn handle_request(request: Request) -> std::io::Result<Response> {
     let response = if &request.path == "/" {
         Response::ok()
     } else if let Some(content) = request.path.strip_prefix("/echo/") {
@@ -88,7 +63,7 @@ fn handle_request(request: &Request) -> std::io::Result<Response> {
         };
 
         Response::ok()
-            .set_header("Content-Type", "text/plain")
+            .set_header("Content-type", "text/plain")
             .set_header("Content-Length", user_agent.len().to_string().as_str())
             .set_body(user_agent.as_bytes())
     } else if let Some(file_name) = request.path.strip_prefix("/files/") {
