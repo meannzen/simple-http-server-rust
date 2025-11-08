@@ -29,9 +29,16 @@ fn handle_connection(mut stream: TcpStream) {
             break;
         }
         let request = parse_request(&buf[0..n]).unwrap_or_default();
+        let is_close = request
+            .header
+            .get("Connection")
+            .is_some_and(|value| value == "close");
         match handle_request(request) {
             Ok(response) => {
-                dbg!(&response);
+                if is_close {
+                    let _ = response.set_header("Connection", "close").write(&stream);
+                    break;
+                }
                 let _ = response.write(&stream);
             }
             Err(_) => {
