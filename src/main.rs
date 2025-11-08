@@ -1,4 +1,4 @@
-use codecrafters_http_server::{parse_request, Method, Request, Response, ThreadPool};
+use codecrafters_http_server::{parse_request, Method, Request, Response};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 use std::{
@@ -6,15 +6,20 @@ use std::{
     fs::File,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    thread,
 };
 
-fn main() {
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
     let listener = TcpListener::bind("127.0.0.1:4221").unwrap();
-    let pool = ThreadPool::new(4);
     for stream in listener.incoming() {
-        let stream = stream.unwrap();
-        pool.execute(move || handle_connection(stream));
+        thread::spawn(move || {
+            let stream = stream.unwrap();
+            handle_connection(stream)
+        });
     }
+
+    Ok(())
 }
 
 fn handle_connection(mut stream: TcpStream) {

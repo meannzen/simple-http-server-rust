@@ -2,8 +2,6 @@ use std::{
     collections::HashMap,
     io::{BufRead, Cursor, Read, Write},
     str::FromStr,
-    sync::{mpsc, Arc, Mutex},
-    thread,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -92,56 +90,6 @@ impl FromStr for Method {
             "POST" => Ok(Method::POST),
             _ => Err(ParseSteamError(format!("Invalid Http Method {}", method))),
         }
-    }
-}
-
-pub struct ThreadPool {
-    pub workers: Vec<Worker>,
-    pub sender: mpsc::Sender<Job>,
-}
-
-type Job = Box<dyn FnOnce() + Send + 'static>;
-
-impl ThreadPool {
-    pub fn new(size: usize) -> Self {
-        assert!(size > 0); // panic
-
-        let mut workers = Vec::with_capacity(size);
-        let (sender, receiver) = mpsc::channel::<Job>();
-        let receiver = Arc::new(Mutex::new(receiver));
-        for id in 0..size {
-            let worker = Worker::new(id, Arc::clone(&receiver));
-            workers.push(worker);
-        }
-        ThreadPool { workers, sender }
-    }
-
-    pub fn execute<F>(&self, f: F)
-    where
-        F: FnOnce() + Send + 'static,
-    {
-        let job = Box::new(f);
-        self.sender.send(job).unwrap();
-    }
-}
-
-#[allow(unused)]
-pub struct Worker {
-    id: usize,
-    thread: thread::JoinHandle<()>,
-}
-
-impl Worker {
-    fn new(id: usize, receiver: Arc<Mutex<mpsc::Receiver<Job>>>) -> Self {
-        let thread = thread::spawn(move || {
-            while let Ok(job) = receiver.lock().unwrap().recv() {
-                println!("Worker {id} got a job; executing.");
-
-                job();
-            }
-        });
-
-        Self { id, thread }
     }
 }
 
