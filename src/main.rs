@@ -13,18 +13,25 @@ fn main() {
     let pool = ThreadPool::new(4);
     for stream in listener.incoming() {
         let stream = stream.unwrap();
-        pool.execute(|| handle_connection(stream));
+        pool.execute(move || handle_connection(stream));
     }
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    let request = parse_request(&mut stream).unwrap_or_default(); 
-    match handle_request(request) {
-        Ok(response) => {
-            let _ = response.write(stream);
+    let mut buf = [0u8; 1024];
+    while let Ok(n) = stream.read(&mut buf) {
+        if n == 0 {
+            break;
         }
-        Err(_) => {
-            panic!("Server error")
+        let request = parse_request(&buf[0..n]).unwrap_or_default();
+        match handle_request(request) {
+            Ok(response) => {
+                dbg!(&response);
+                let _ = response.write(&stream);
+            }
+            Err(_) => {
+                panic!("Server error")
+            }
         }
     }
 }

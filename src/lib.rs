@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
-    io::{BufRead, BufReader, Read, Write},
-    net::TcpStream,
+    io::{BufRead, Cursor, Read, Write},
     str::FromStr,
     sync::{mpsc, Arc, Mutex},
     thread,
@@ -57,9 +56,7 @@ impl Response {
     }
 
     pub fn set_header(mut self, key: &str, value: &str) -> Self {
-        self.header
-            .entry(key.to_owned())
-            .or_insert(value.to_owned());
+        self.header.insert(key.to_owned(), value.to_owned());
         self
     }
 
@@ -68,7 +65,10 @@ impl Response {
         self
     }
 
-    pub fn write(self, mut writer: impl Write) -> Result<(), std::io::Error> {
+    pub fn write(mut self, mut writer: impl Write) -> Result<(), std::io::Error> {
+        self.header
+            .entry("Content-Length".to_string())
+            .or_insert(self.body.len().to_string());
         let status_line = format!("HTTP/1.1 {}\r\n", self.status);
         writer.write_all(status_line.as_bytes())?;
         for (k, v) in self.header.into_iter() {
@@ -78,6 +78,8 @@ impl Response {
         writer.write_all(b"\r\n")?;
         // body
         writer.write_all(&self.body)?;
+
+        writer.flush()?;
 
         Ok(())
     }
@@ -158,16 +160,19 @@ pub struct Request {
     pub body: Vec<u8>,
 }
 
-pub fn parse_request(mut stream: &mut TcpStream) -> Result<Request, ParseSteamError> {
-    let mut buf_reader = BufReader::new(&mut stream);
+pub fn parse_request(buf: &[u8]) -> Result<Request, ParseSteamError> {
     let mut http_request: Vec<String> = vec![];
-
-    for line in buf_reader.by_ref().lines() {
+    let mut cursor = Cursor::new(buf);
+    for line in cursor.by_ref().lines() {
         let line = line.map_err(|e| ParseSteamError(e.to_string()))?;
         if line.is_empty() {
             break;
         }
         http_request.push(line);
+    }
+
+    if http_request.is_empty() {
+        return Err(ParseSteamError("Invalid request".to_string()));
     }
 
     let parts: Vec<_> = http_request[0].split(' ').collect();
@@ -189,7 +194,7 @@ pub fn parse_request(mut stream: &mut TcpStream) -> Result<Request, ParseSteamEr
     if let Some(length) = header.get("Content-Length") {
         if let Ok(n) = length.parse() {
             body.resize(n, 0);
-            buf_reader
+            cursor
                 .read_exact(&mut body)
                 .map_err(|e| ParseSteamError(e.to_string()))?;
         };
